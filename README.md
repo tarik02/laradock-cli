@@ -5,6 +5,7 @@ My CLI wrapper for [Laradock](https://github.com/Laradock/laradock).
 ## Requirements
 - Docker
 - Python3
+- python-dotenv (`$ pip3 install python-dotenv`)
 
 ## Installation
 ```
