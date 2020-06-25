@@ -153,7 +153,7 @@ elif action == 'enter':
         'workspace',
         'sh',
         '-c',
-        f'clear && bash -c $SHELL',
+        f'clear && bash -c \\$SHELL',
     )
 elif action == 'sudo':
     compose(
@@ -165,7 +165,7 @@ elif action == 'sudo':
         'workspace',
         'sh',
         '-c',
-        f'clear && bash -c $SHELL',
+        f'clear && bash -c \\$SHELL',
     )
 elif action == 'up':
     start_services(args)
