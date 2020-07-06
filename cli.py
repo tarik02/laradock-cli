@@ -8,6 +8,8 @@ import sys
 import subprocess
 import os
 import urllib.request
+import shutil
+import re
 from pathlib import Path
 from typing import Optional
 from dotenv import dotenv_values
@@ -128,7 +130,133 @@ def shellquote(s):
     return "'" + s.replace("'", "'\\''") + "'"
 
 
-if action == 'start':
+def apply_env(laradock_env: dict, project_dir: Path, project_env: dict, result_env: dict):
+    project_name = project_dir.name
+
+    if 'APP_URL' in project_env:
+        result_env['APP_URL'] = f'http://{project_name}.test'
+
+    if project_env.get('DB_CONNECTION') == 'mysql':
+        result_env['DB_HOST'] = 'mysql'
+        result_env['DB_PORT'] = 3306
+        result_env['DB_DATABASE'] = project_name
+        result_env['DB_USERNAME'] = 'root'
+        result_env['DB_PASSWORD'] = laradock_env['MYSQL_ROOT_PASSWORD']
+
+    if 'REDIS_HOST' in project_env:
+        result_env['REDIS_HOST'] = 'redis'
+        result_env['REDIS_PASSWORD'] = None
+        result_env['REDIS_PORT'] = 6379
+
+    if 'MAIL_DRIVER' in project_env:
+        result_env['MAIL_HOST'] = 'mailhog'
+        result_env['MAIL_PORT'] = 1025
+        result_env['MAIL_USERNAME'] = None
+        result_env['MAIL_PASSWORD'] = None
+        result_env['MAIL_ENCRYPTION'] = None
+
+    if (LARADOCK_ROOT/'env.py').exists():
+        with open(LARADOCK_ROOT/'env.py') as f:
+            exec(f.read(), {
+                'laradock_env': laradock_env,
+                'project_dir': project_dir,
+                'project_env': project_env,
+                'result_env': result_env,
+            })
+
+
+RESTRICTED_ENV_STRINGS = [
+    'true', 'TRUE', 'True',
+    'false', 'FALSE', 'False',
+    'on', 'ON', 'On',
+    'off', 'OFF', 'Off',
+    'yes', 'YES', 'Yes',
+    'no', 'NO', 'NO',
+
+    'null',
+]
+
+
+def stringify_env_value(val, quotes: bool = True) -> str:
+    if isinstance(val, Path):
+        val = str(val.absolute())
+
+    if val is True:
+        return 'true'
+
+    if val is False:
+        return 'false'
+
+    if val is None:
+        return 'null'
+
+    if isinstance(val, int) or isinstance(val, float):
+        return str(val)
+
+    if isinstance(val, str):
+        should_be_quoted = re.search(r'["\'%!`, ]', val) or \
+            re.match(r'^[0-9\.]', val) or \
+            val in RESTRICTED_ENV_STRINGS
+        if should_be_quoted:
+            val = val\
+                .replace('"', '\\"')\
+                .replace('\n', '\\n')\
+                .replace(',', '\\,')
+        if should_be_quoted and quotes:
+            val = f'"{val}"'
+        return val
+
+    if isinstance(val, list):
+        return '"' + ','.join(map(lambda s: stringify_env_value(s, False), val)) + '"'
+
+    raise ValueError(f'Don\'t know how to stringify "{val}"')
+
+
+if action == 'env':
+    project_dir = Path.cwd()
+    env_file = project_dir/'.env'
+
+    if not env_file.exists():
+        print('Env file does not exist. Trying to create...')
+
+        if (project_dir/'.env.example').exists():
+            shutil.copy(project_dir/'.env.example', env_file)
+        elif (project_dir/'env.example').exists():
+            shutil.copy(project_dir/'env.example', env_file)
+        else:
+            print('Can\'t create .env file: neither .env.example nor env.example exist.')
+            exit(1)
+
+        print('.env file created successfully.')
+
+    print('Preparing new .env file...')
+    project_env = dotenv_values(env_file)
+    result_env = {}
+
+    apply_env(env, project_dir, project_env, result_env)
+
+    with env_file.open('r') as inf, (project_dir/'.env.tmp').open('w') as outf:
+        while True:
+            line = inf.readline()
+            if not line:
+                break
+
+            match = re.match(r'^([a-zA-Z0-9_]+)=', line)
+            if not match:
+                outf.write(line)
+                continue
+
+            key = match.group(1)
+            if key not in result_env:
+                outf.write(line)
+                continue
+
+            outf.write(f'{key}={stringify_env_value(result_env[key])}\n')
+
+    print('Replacing an old .env file with the new one...')
+    (project_dir/'.env.tmp').rename(env_file)
+    print('Done!')
+elif action == 'start':
     start_services([
         'nginx',
         'mysql',
