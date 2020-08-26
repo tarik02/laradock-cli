@@ -37,7 +37,7 @@ if [[ "$1" == "init" ]]; then
 		set -e
 		mkdir -p $LARADOCK_ROOT
 		cd $LARADOCK_ROOT
-		#curl -o cli.py -fsSL https://github.com/Tarik02/laradock-cli/raw/master/cli.py
+		curl -o cli.py -fsSL https://github.com/Tarik02/laradock-cli/raw/master/cli.py
 		git clone https://github.com/Laradock/laradock.git .laradock
 		if [ "$#" -eq 1 ]; then
 			cd .laradock
