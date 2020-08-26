@@ -71,23 +71,31 @@ if len(sys.argv) == 1:
 action = sys.argv[1]
 args = sys.argv[2:]
 
-if action == 'help':
-    print(HELP)
-    exit(1)
-elif action == 'init':
-    with (LARADOCK_CONTAINERS_ROOT/'env-example').open('r') as f:
-        env = f.read()
-    env = env.replace('APP_CODE_PATH_CONTAINER=/var/www', f'APP_CODE_PATH_CONTAINER={LARADOCK_ROOT}')
-    with (LARADOCK_CONTAINERS_ROOT/'.env').open('w') as f:
-        f.write(env)
-    exit(0)
-elif action == 'upgrade':
-    response = urllib.request.urlopen(UPGRADE_URL)
-    data = response.read().decode('utf-8')
-    with open(__file__, 'w') as f:
-        f.write(data)
-    print('Upgrade successfull.')
-    exit(0)
+try:
+    if action == 'help':
+        print(HELP)
+        exit(1)
+    elif action == 'init':
+        with (LARADOCK_CONTAINERS_ROOT/'env-example').open('r') as f:
+            env = f.read()
+        env = env.replace('APP_CODE_PATH_CONTAINER=/var/www', f'APP_CODE_PATH_CONTAINER={LARADOCK_ROOT}')
+        with (LARADOCK_CONTAINERS_ROOT/'.env').open('w') as f:
+            f.write(env)
+        exit(0)
+    elif action == 'upgrade':
+        response = urllib.request.urlopen(UPGRADE_URL)
+        data = response.read().decode('utf-8')
+        with open(__file__, 'w') as f:
+            f.write(data)
+        print('Upgrade successfull.')
+        exit(0)
+except KeyboardInterrupt:
+    print('Interrupted')
+    try:
+        sys.exit(0) 
+    except SystemExit:
+        os._exit(0)
+
 
 env = dotenv_values(LARADOCK_CONTAINERS_ROOT/'.env')
 
@@ -251,123 +259,130 @@ def stringify_env_value(val, quotes: bool = True) -> str:
     raise ValueError(f'Don\'t know how to stringify "{val}"')
 
 
-if action == 'env':
-    project_dir = find_project_root_dir()
-    env_file = project_dir/'.env'
+try:
+    if action == 'env':
+        project_dir = find_project_root_dir()
+        env_file = project_dir/'.env'
 
-    if not env_file.exists():
-        print('Env file does not exist. Trying to create...')
+        if not env_file.exists():
+            print('Env file does not exist. Trying to create...')
 
-        if (project_dir/'.env.example').exists():
-            shutil.copy(project_dir/'.env.example', env_file)
-        elif (project_dir/'env.example').exists():
-            shutil.copy(project_dir/'env.example', env_file)
-        else:
-            print('Can\'t create .env file: neither .env.example nor env.example exist.')
-            exit(1)
+            if (project_dir/'.env.example').exists():
+                shutil.copy(project_dir/'.env.example', env_file)
+            elif (project_dir/'env.example').exists():
+                shutil.copy(project_dir/'env.example', env_file)
+            else:
+                print('Can\'t create .env file: neither .env.example nor env.example exist.')
+                exit(1)
 
-        print('.env file created successfully.')
+            print('.env file created successfully.')
 
-    print('Preparing new .env file...')
-    project_env = dotenv_values(env_file)
-    result_env = {}
+        print('Preparing new .env file...')
+        project_env = dotenv_values(env_file)
+        result_env = {}
 
-    apply_env(env, project_dir, project_env, result_env)
+        apply_env(env, project_dir, project_env, result_env)
 
-    with env_file.open('r') as inf, (project_dir/'.env.tmp').open('w') as outf:
-        while True:
-            line = inf.readline()
-            if not line:
-                break
+        with env_file.open('r') as inf, (project_dir/'.env.tmp').open('w') as outf:
+            while True:
+                line = inf.readline()
+                if not line:
+                    break
 
-            match = re.match(r'^([a-zA-Z0-9_]+)=', line)
-            if not match:
-                outf.write(line)
-                continue
+                match = re.match(r'^([a-zA-Z0-9_]+)=', line)
+                if not match:
+                    outf.write(line)
+                    continue
 
-            key = match.group(1)
-            if key not in result_env:
-                outf.write(line)
-                continue
+                key = match.group(1)
+                if key not in result_env:
+                    outf.write(line)
+                    continue
 
-            outf.write(f'{key}={stringify_env_value(result_env[key])}\n')
+                outf.write(f'{key}={stringify_env_value(result_env[key])}\n')
 
-    print('Replacing an old .env file with the new one...')
-    (project_dir/'.env.tmp').rename(env_file)
-    print('Done!')
-elif action == 'start':
-    start_services([
-        'nginx',
-        'mysql',
-        'workspace',
-    ])
-elif action == 'stop':
-    compose('down')
-elif action == 'restart':
-    compose('down')
-    start_services([
-        'nginx',
-        'mysql',
-        'workspace',
-    ])
-elif action == 'enter':
-    container_name = args[0] if len(args) >= 1 else load_project_env().get('LARADOCK_WORKSPACE', 'workspace')
-    compose(
-        'exec',
-        '--user=laradock' if container_name.startswith('workspace') else None,
-        '--env',
-        f'LARADOCK_ROOT={APP_CODE_PATH_CONTAINER}',
-        '--workdir',
-        path_host_to_container(Path.cwd()) or APP_CODE_PATH_CONTAINER,
-        container_name,
-        'sh',
-        '-c',
-        f'clear && bash -c \\$SHELL',
-    )
-elif action == 'sudo':
-    container_name = load_project_env().get('LARADOCK_WORKSPACE', 'workspace')
-    compose(
-        'exec',
-        '--env',
-        f'LARADOCK_ROOT={APP_CODE_PATH_CONTAINER}',
-        '--workdir',
-        path_host_to_container(Path.cwd()) or APP_CODE_PATH_CONTAINER,
-        container_name,
-        'sh',
-        '-c',
-        f'clear && bash -c \\$SHELL',
-    )
-elif action == 'up':
-    if len(args) == 0:
-        project_env = load_project_env()
+        print('Replacing an old .env file with the new one...')
+        (project_dir/'.env.tmp').rename(env_file)
+        print('Done!')
+    elif action == 'start':
+        start_services([
+            'nginx',
+            'mysql',
+            'workspace',
+        ])
+    elif action == 'stop':
+        compose('down')
+    elif action == 'restart':
+        compose('down')
+        start_services([
+            'nginx',
+            'mysql',
+            'workspace',
+        ])
+    elif action == 'enter':
+        container_name = args[0] if len(args) >= 1 else load_project_env().get('LARADOCK_WORKSPACE', 'workspace')
+        compose(
+            'exec',
+            '--user=laradock' if container_name.startswith('workspace') else None,
+            '--env',
+            f'LARADOCK_ROOT={APP_CODE_PATH_CONTAINER}',
+            '--workdir',
+            path_host_to_container(Path.cwd()) or APP_CODE_PATH_CONTAINER,
+            container_name,
+            'sh',
+            '-c',
+            f'clear && bash -c \\$SHELL',
+        )
+    elif action == 'sudo':
+        container_name = load_project_env().get('LARADOCK_WORKSPACE', 'workspace')
+        compose(
+            'exec',
+            '--env',
+            f'LARADOCK_ROOT={APP_CODE_PATH_CONTAINER}',
+            '--workdir',
+            path_host_to_container(Path.cwd()) or APP_CODE_PATH_CONTAINER,
+            container_name,
+            'sh',
+            '-c',
+            f'clear && bash -c \\$SHELL',
+        )
+    elif action == 'up':
+        if len(args) == 0:
+            project_env = load_project_env()
 
-        if 'LARADOCK_SERVICES' in project_env:
-            args = project_env['LARADOCK_SERVICES'].split(',')
-        else:
-            print('Specify LARADOCK_SERVICES variable in your project .env file.')
-            exit(-1)
+            if 'LARADOCK_SERVICES' in project_env:
+                args = project_env['LARADOCK_SERVICES'].split(',')
+            else:
+                print('Specify LARADOCK_SERVICES variable in your project .env file.')
+                exit(-1)
 
-    start_services(args)
-elif action == 'down':
-    compose('stop', *args)
-elif action == 'reup':
-    compose('stop', *args)
-    start_services(args)
-elif action == 'reload':
-    compose('exec', 'nginx', 'nginx', '-s', 'reload')
-elif action == 'run':
-    command = shellquote(' '.join(args))
-    compose(
-        'exec',
-        '--user=laradock',
-        '--env',
-        f'LARADOCK_ROOT={APP_CODE_PATH_CONTAINER}',
-        '--workdir',
-        path_host_to_container(Path.cwd()) or APP_CODE_PATH_CONTAINER,
-        'workspace',
-        'sh',
-        '-c',
-        f'bash -c {command}',
-    )
-else:
-    compose(action, *args)
+        start_services(args)
+    elif action == 'down':
+        compose('stop', *args)
+    elif action == 'reup':
+        compose('stop', *args)
+        start_services(args)
+    elif action == 'reload':
+        compose('exec', 'nginx', 'nginx', '-s', 'reload')
+    elif action == 'run':
+        command = shellquote(' '.join(args))
+        compose(
+            'exec',
+            '--user=laradock',
+            '--env',
+            f'LARADOCK_ROOT={APP_CODE_PATH_CONTAINER}',
+            '--workdir',
+            path_host_to_container(Path.cwd()) or APP_CODE_PATH_CONTAINER,
+            'workspace',
+            'sh',
+            '-c',
+            f'bash -c {command}',
+        )
+    else:
+        compose(action, *args)
+except KeyboardInterrupt:
+    print('Interrupted')
+    try:
+        sys.exit(0)
+    except SystemExit:
+        os._exit(0)
