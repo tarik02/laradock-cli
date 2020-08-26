@@ -36,13 +36,13 @@ Stop all services.
 
 Stop all services, start default services.
 
-#### `$ laradock enter`
+#### `$ laradock enter [container]`
 
-Enter into running workspace container.
+Enter into running workspace container. If container name is not specified, it fallbacks to `LARADOCK_WORKSPACE` from project's .env and to just `workspace` then.
 
 #### `$ laradock up [services...]`
 
-Start the specified services.
+Start the specified services. If the services are not specified, `LARADOCK_SERVICES` variable as a comma-separated list from project's .env is used.
 
 #### `$ laradock down [services...]`
 

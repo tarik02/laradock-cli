@@ -59,6 +59,7 @@ laradock <...command>
 
 
 LARADOCK_ROOT = Path(os.environ['LARADOCK_ROOT'])
+LARADOCK_CONTAINERS_ROOT = LARADOCK_ROOT/'.laradock'
 
 if len(sys.argv) == 1:
     sys.stdout.write(HELP)
@@ -71,10 +72,10 @@ if action == 'help':
     print(HELP)
     exit(1)
 elif action == 'init':
-    with (LARADOCK_ROOT/'.laradock'/'env-example').open('r') as f:
+    with (LARADOCK_CONTAINERS_ROOT/'env-example').open('r') as f:
         env = f.read()
     env = env.replace('APP_CODE_PATH_CONTAINER=/var/www', f'APP_CODE_PATH_CONTAINER={LARADOCK_ROOT}')
-    with (LARADOCK_ROOT/'.laradock'/'.env').open('w') as f:
+    with (LARADOCK_CONTAINERS_ROOT/'.env').open('w') as f:
         f.write(env)
     exit(0)
 elif action == 'upgrade':
@@ -85,9 +86,9 @@ elif action == 'upgrade':
     print('Upgrade successfull.')
     exit(0)
 
-env = dotenv_values(LARADOCK_ROOT/'.laradock'/'.env')
+env = dotenv_values(LARADOCK_CONTAINERS_ROOT/'.env')
 
-APP_CODE_PATH = (LARADOCK_ROOT/'.laradock'/env['APP_CODE_PATH_HOST']).resolve()
+APP_CODE_PATH = (LARADOCK_CONTAINERS_ROOT/env['APP_CODE_PATH_HOST']).resolve()
 APP_CODE_PATH_HOST = env['APP_CODE_PATH_HOST']
 APP_CODE_PATH_CONTAINER = env['APP_CODE_PATH_CONTAINER']
 
@@ -110,9 +111,9 @@ def compose(*args):
     code = subprocess.run(
         [
             'docker-compose',
-            *args,
+            *[i for i in args if i is not None],
         ],
-        cwd=LARADOCK_ROOT/'.laradock',
+        cwd=LARADOCK_CONTAINERS_ROOT,
     ).returncode
     if code != 0:
         exit(code)
@@ -128,6 +129,41 @@ def start_services(services):
 
 def shellquote(s):
     return "'" + s.replace("'", "'\\''") + "'"
+
+
+def find_project_root_dir(start: Path = Path.cwd()) -> Optional[Path]:
+    if LARADOCK_CONTAINERS_ROOT in (start, *start.parents):
+        return None
+
+    for path in [start, *start.parents]:
+        if path == LARADOCK_ROOT:
+            break
+
+        if (path/'.env').exists or (path/'.env.example').exists:
+            return path
+
+    return None
+
+
+def find_project_env_file(start: Path = Path.cwd()) -> Optional[Path]:
+    project_dir = find_project_root_dir(start)
+    if project_dir is None:
+        return None
+
+    env_file = project_dir/'.env'
+
+    if env_file.exists:
+        return env_file
+
+    return None
+
+
+def load_project_env(start: Path = Path.cwd()) -> dict:
+    env_file = find_project_env_file(start)
+    if env_file is None:
+        return {}
+
+    return dotenv_values(env_file)
 
 
 def apply_env(laradock_env: dict, project_dir: Path, project_env: dict, result_env: dict):
@@ -213,7 +249,7 @@ def stringify_env_value(val, quotes: bool = True) -> str:
 
 
 if action == 'env':
-    project_dir = Path.cwd()
+    project_dir = find_project_root_dir()
     env_file = project_dir/'.env'
 
     if not env_file.exists():
@@ -268,34 +304,46 @@ elif action == 'restart':
     compose('down')
     start_services([
         'nginx',
+        'mysql',
         'workspace',
     ])
 elif action == 'enter':
+    container_name = args[0] if len(args) >= 1 else load_project_env().get('LARADOCK_WORKSPACE', 'workspace')
     compose(
         'exec',
-        '--user=laradock',
+        '--user=laradock' if container_name.startswith('workspace') else None,
         '--env',
         f'LARADOCK_ROOT={APP_CODE_PATH_CONTAINER}',
         '--workdir',
         path_host_to_container(Path.cwd()) or APP_CODE_PATH_CONTAINER,
-        'workspace',
+        container_name,
         'sh',
         '-c',
         f'clear && bash -c \\$SHELL',
     )
 elif action == 'sudo':
+    container_name = load_project_env().get('LARADOCK_WORKSPACE', 'workspace')
     compose(
         'exec',
         '--env',
         f'LARADOCK_ROOT={APP_CODE_PATH_CONTAINER}',
         '--workdir',
         path_host_to_container(Path.cwd()) or APP_CODE_PATH_CONTAINER,
-        'workspace',
+        container_name,
         'sh',
         '-c',
         f'clear && bash -c \\$SHELL',
     )
 elif action == 'up':
+    if len(args) == 0:
+        project_env = load_project_env()
+
+        if 'LARADOCK_SERVICES' in project_env:
+            args = project_env['LARADOCK_SERVICES'].split(',')
+        else:
+            print('Specify LARADOCK_SERVICES variable in your project .env file.')
+            exit(-1)
+
     start_services(args)
 elif action == 'down':
     compose('stop', *args)
