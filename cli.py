@@ -10,6 +10,7 @@ import os
 import urllib.request
 import shutil
 import re
+import grp
 from pathlib import Path
 from typing import Optional
 from dotenv import dotenv_values
@@ -76,9 +77,16 @@ try:
         print(HELP)
         exit(1)
     elif action == 'init':
-        with (LARADOCK_CONTAINERS_ROOT/'env-example').open('r') as f:
+        env_file = LARADOCK_CONTAINERS_ROOT/'.env'
+        if not env_file.exists:
+            env_file = LARADOCK_CONTAINERS_ROOT/'env-example'
+        with env_file.open('r') as f:
             env = f.read()
-        env = env.replace('APP_CODE_PATH_CONTAINER=/var/www', f'APP_CODE_PATH_CONTAINER={LARADOCK_ROOT}')
+
+        DOCKER_GID = grp.getgrnam('docker').gr_gid
+        env = re.sub(r'APP_CODE_PATH_CONTAINER=[^\n]*', f'APP_CODE_PATH_CONTAINER={LARADOCK_ROOT}', env)
+        env = re.sub(r'DOCKER_GID=[^\n]*', f'DOCKER_GID={DOCKER_GID}', env)
+
         with (LARADOCK_CONTAINERS_ROOT/'.env').open('w') as f:
             f.write(env)
         exit(0)
