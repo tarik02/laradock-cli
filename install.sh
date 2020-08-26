@@ -38,7 +38,9 @@ if [[ "$1" == "init" ]]; then
 		mkdir -p $LARADOCK_ROOT
 		cd $LARADOCK_ROOT
 		curl -o cli.py -fsSL https://github.com/Tarik02/laradock-cli/raw/master/cli.py
-		git clone https://github.com/Laradock/laradock.git .laradock
+		if [ ! -d .laradock ]; then
+			git clone https://github.com/Laradock/laradock.git .laradock
+		fi
 		if [ "$#" -eq 1 ]; then
 			cd .laradock
 			curl -o laradock.patch "$1"
