@@ -24,6 +24,10 @@ Initialize laradock environment. If specified, a patch will be downloaded and ap
 
 Replace current cli with the latest version.
 
+#### `$ laradock env`
+
+Setup project's .env file automagically.
+
 #### `$ laradock start`
 
 Start default services (as for now, it is nginx, mysql and workspace).
