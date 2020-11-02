@@ -113,6 +113,8 @@ APP_CODE_PATH = (LARADOCK_CONTAINERS_ROOT/env['APP_CODE_PATH_HOST']).resolve()
 APP_CODE_PATH_HOST = env['APP_CODE_PATH_HOST']
 APP_CODE_PATH_CONTAINER = env['APP_CODE_PATH_CONTAINER']
 LARADOCK_CLI_DEFAULT_CONTAINERS = (env.get('LARADOCK_CLI_DEFAULT_CONTAINERS') or 'nginx,mysql,workspace').split(',')
+LARADOCK_CLI_DEFAULT_WORKSPACE = env.get('LARADOCK_CLI_DEFAULT_WORKSPACE') or 'workspace'
+LARADOCK_CLI_WORKSPACE_PREFIX = env.get('LARADOCK_CLI_WORKSPACE_PREFIX') or 'workspace'
 
 
 def path_host_to_container(host: Path) -> Optional[str]:
@@ -329,10 +331,10 @@ try:
             compose('down')
             start_services(LARADOCK_CLI_DEFAULT_CONTAINERS)
     elif action == 'enter':
-        container_name = args[0] if len(args) >= 1 else load_project_env().get('LARADOCK_WORKSPACE', 'workspace')
+        container_name = args[0] if len(args) >= 1 else load_project_env().get('LARADOCK_CLI_WORKSPACE', LARADOCK_CLI_DEFAULT_WORKSPACE)
         compose(
             'exec',
-            '--user=laradock' if container_name.startswith('workspace') else None,
+            '--user=laradock' if container_name.startswith(LARADOCK_CLI_WORKSPACE_PREFIX) else None,
             '--env',
             f'LARADOCK_ROOT={APP_CODE_PATH_CONTAINER}',
             '--workdir',
@@ -343,9 +345,10 @@ try:
             f'clear && bash -c \\$SHELL',
         )
     elif action == 'sudo':
-        container_name = load_project_env().get('LARADOCK_WORKSPACE', 'workspace')
+        container_name = load_project_env().get('LARADOCK_CLI_WORKSPACE', LARADOCK_CLI_DEFAULT_WORKSPACE_CONTAINER)
         compose(
             'exec',
+            '--user=root',
             '--env',
             f'LARADOCK_ROOT={APP_CODE_PATH_CONTAINER}',
             '--workdir',
@@ -374,15 +377,16 @@ try:
     elif action == 'reload':
         compose('exec', 'nginx', 'nginx', '-s', 'reload')
     elif action == 'run':
+        container_name = load_project_env().get('LARADOCK_CLI_WORKSPACE', LARADOCK_CLI_DEFAULT_WORKSPACE_CONTAINER)
         command = shellquote(' '.join(args))
         compose(
             'exec',
-            '--user=laradock',
+            '--user=laradock' if container_name.startswith(LARADOCK_CLI_WORKSPACE_PREFIX) else None,
             '--env',
             f'LARADOCK_ROOT={APP_CODE_PATH_CONTAINER}',
             '--workdir',
             path_host_to_container(Path.cwd()) or APP_CODE_PATH_CONTAINER,
-            'workspace',
+            container_name,
             'sh',
             '-c',
             f'bash -c {command}',
