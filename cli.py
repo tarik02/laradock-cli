@@ -102,7 +102,7 @@ try:
 except KeyboardInterrupt:
     print('Interrupted')
     try:
-        sys.exit(0) 
+        sys.exit(0)
     except SystemExit:
         os._exit(0)
 
@@ -112,6 +112,7 @@ env = dotenv_values(LARADOCK_CONTAINERS_ROOT/'.env')
 APP_CODE_PATH = (LARADOCK_CONTAINERS_ROOT/env['APP_CODE_PATH_HOST']).resolve()
 APP_CODE_PATH_HOST = env['APP_CODE_PATH_HOST']
 APP_CODE_PATH_CONTAINER = env['APP_CODE_PATH_CONTAINER']
+LARADOCK_CLI_DEFAULT_CONTAINERS = (env.get('LARADOCK_CLI_DEFAULT_CONTAINERS') or 'nginx,mysql,workspace').split(',')
 
 
 def path_host_to_container(host: Path) -> Optional[str]:
@@ -315,11 +316,10 @@ try:
         (project_dir/'.env.tmp').rename(env_file)
         print('Done!')
     elif action == 'start':
-        start_services([
-            'nginx',
-            'mysql',
-            'workspace',
-        ])
+        if len(LARADOCK_CLI_DEFAULT_CONTAINERS) == 0:
+            print('No containers to start')
+        else:
+            start_services(LARADOCK_CLI_DEFAULT_CONTAINERS)
     elif action == 'stop':
         compose('down')
     elif action == 'restart':
@@ -360,10 +360,10 @@ try:
         if len(args) == 0:
             project_env = load_project_env()
 
-            if 'LARADOCK_SERVICES' in project_env:
-                args = project_env['LARADOCK_SERVICES'].split(',')
+            if 'LARADOCK_CLI_SERVICES' in project_env:
+                args = project_env['LARADOCK_CLI_SERVICES'].split(',')
             else:
-                print('Specify LARADOCK_SERVICES variable in your project .env file.')
+                print('Specify LARADOCK_CLI_SERVICES variable in your project .env file.')
                 exit(-1)
 
         start_services(args)
