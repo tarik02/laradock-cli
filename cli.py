@@ -323,12 +323,11 @@ try:
     elif action == 'stop':
         compose('down')
     elif action == 'restart':
-        compose('down')
-        start_services([
-            'nginx',
-            'mysql',
-            'workspace',
-        ])
+        if len(LARADOCK_CLI_DEFAULT_CONTAINERS) == 0:
+            print('No containers to start')
+        else:
+            compose('down')
+            start_services(LARADOCK_CLI_DEFAULT_CONTAINERS)
     elif action == 'enter':
         container_name = args[0] if len(args) >= 1 else load_project_env().get('LARADOCK_WORKSPACE', 'workspace')
         compose(
