@@ -11,6 +11,8 @@ import urllib.request
 import shutil
 import re
 import grp
+import importlib.util
+from collections import namedtuple
 from pathlib import Path
 from typing import Optional
 from dotenv import dotenv_values
@@ -387,6 +389,28 @@ try:
             f'bash -c {command}',
         )
     else:
+        if (LARADOCK_ROOT/'commands.py').exists():
+            spec = importlib.util.spec_from_file_location('commands', LARADOCK_ROOT/'commands.py')
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+
+            project_dir = find_project_root_dir()
+            project_env = None
+
+            if project_dir is not None and (project_dir/'.env').exists():
+                project_env = dotenv_values(project_dir/'.env')
+
+            if hasattr(mod, action):
+                sys.exit(getattr(mod, action)(
+                    namedtuple('Context', ['compose', 'laradock_env', 'project_dir', 'project_env', 'args'])(
+                        compose,
+                        env,
+                        project_dir,
+                        project_env,
+                        args,
+                    )
+                ))
+
         compose(action, *args)
 except KeyboardInterrupt:
     print('Interrupted')
