@@ -16,7 +16,7 @@ $ laradock init
 
 ## Usage
 
-#### `$ laradock init [patch url]`
+#### `$ laradock init [--repo=https://github.com/Laradock/laradock.git] [--patch=url to patch]`
 
 Initialize laradock environment. If specified, a patch will be downloaded and applied to Laradock.
 

@@ -29,26 +29,12 @@ fi
 
 if [[ "$1" == "init" ]]; then
 	shift
-	if [ "$#" -gt 1 ]; then
-		echo "Usage: laradock init [patch url]"
-		exit 1
-	fi
 	(
 		set -e
 		mkdir -p $LARADOCK_ROOT
 		cd $LARADOCK_ROOT
 		curl -o cli.py -fsSL https://github.com/Tarik02/laradock-cli/raw/master/cli.py
-		if [ ! -d .laradock ]; then
-			git clone https://github.com/Laradock/laradock.git .laradock
-		fi
-		if [ "$#" -eq 1 ]; then
-			cd .laradock
-			curl -o laradock.patch "$1"
-			git apply laradock.patch
-			rm laradock.patch
-		fi
-		cd ..
-		LARADOCK_ROOT="$LARADOCK_ROOT" python3 $LARADOCK_ROOT/cli.py init
+		LARADOCK_ROOT="$LARADOCK_ROOT" python3 $LARADOCK_ROOT/cli.py init "$@"
 	)
 	exit $?
 fi

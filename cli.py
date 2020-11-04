@@ -71,6 +71,18 @@ if len(sys.argv) == 1:
     sys.stdout.write(HELP)
     exit(1)
 
+
+def shell(cwd, *args):
+    code = subprocess.run(
+        [
+            *[i for i in args if i is not None],
+        ],
+        cwd=cwd,
+    ).returncode
+    if code != 0:
+        exit(code)
+
+
 action = sys.argv[1]
 args = sys.argv[2:]
 
@@ -79,9 +91,30 @@ try:
         print(HELP)
         exit(1)
     elif action == 'init':
+        patch_url = None
+        repo_url = 'https://github.com/Laradock/laradock.git'
+
+        for arg in args:
+            if arg.startswith('--repo='):
+                repo_url = arg[len('--repo='):]
+            elif arg.startswith('--patch='):
+                patch_url = arg[len('--patch'):]
+            else:
+                patch_url = arg
+
+        if not LARADOCK_CONTAINERS_ROOT.exists():
+            shell(LARADOCK_ROOT, 'git', 'clone', repo_url, str(LARADOCK_CONTAINERS_ROOT.absolute()))
+
+            if patch_url is not None:
+                shell(LARADOCK_CONTAINERS_ROOT, 'curl', '-o', 'laradock.patch', patch_url)
+                shell(LARADOCK_CONTAINERS_ROOT, 'git', 'apply', 'laradock.patch')
+                shell(LARADOCK_CONTAINERS_ROOT, 'rm', 'laradock.patch')
+
         env_file = LARADOCK_CONTAINERS_ROOT/'.env'
-        if not env_file.exists:
+        if not env_file.exists():
             env_file = LARADOCK_CONTAINERS_ROOT/'env-example'
+            if not env_file.exists():
+                env_file = LARADOCK_CONTAINERS_ROOT/'.env.example'
         with env_file.open('r') as f:
             env = f.read()
 
@@ -132,15 +165,11 @@ def path_container_to_host(container: str) -> Optional[Path]:
 
 
 def compose(*args):
-    code = subprocess.run(
-        [
-            'docker-compose',
-            *[i for i in args if i is not None],
-        ],
-        cwd=LARADOCK_CONTAINERS_ROOT,
-    ).returncode
-    if code != 0:
-        exit(code)
+    shell(
+        LARADOCK_CONTAINERS_ROOT,
+        'docker-compose',
+        *args,
+    )
 
 
 def start_services(services):
