@@ -22,6 +22,10 @@ if [ -z $LARADOCK_ROOT ]; then
 	LARADOCK_ROOT=$HOME/Laradock
 fi
 
+if [ -z $LARADOCK_CLI ]; then
+	LARADOCK_CLI="$LARADOCK_ROOT/cli.py"
+fi
+
 if ! type python3 > /dev/null; then
 	echo "This command requires python3 to be available."
 	exit 1
@@ -33,18 +37,18 @@ if [[ "$1" == "init" ]]; then
 		set -e
 		mkdir -p $LARADOCK_ROOT
 		cd $LARADOCK_ROOT
-		curl -o cli.py -fsSL https://github.com/Tarik02/laradock-cli/raw/master/cli.py
-		LARADOCK_ROOT="$LARADOCK_ROOT" python3 $LARADOCK_ROOT/cli.py init "$@"
+		curl -o $LARADOCK_CLI -fsSL https://github.com/Tarik02/laradock-cli/raw/master/cli.py
+		LARADOCK_ROOT="$LARADOCK_ROOT" python3 $LARADOCK_CLI init "$@"
 	)
 	exit $?
 fi
 
-if [ ! -d $LARADOCK_ROOT ] || [ ! -f $LARADOCK_ROOT/cli.py ]; then
+if [ ! -d $LARADOCK_ROOT ] || [ ! -f $LARADOCK_CLI ]; then
 	echo "Laradock is not initialized. Run \`laradock init\` to initialize laradock."
 	exit 1
 fi
 
-LARADOCK_ROOT="$LARADOCK_ROOT" python3 $LARADOCK_ROOT/cli.py "$@"
+LARADOCK_ROOT="$LARADOCK_ROOT" python3 $LARADOCK_CLI "$@"
 exit $?
 EOF
 
