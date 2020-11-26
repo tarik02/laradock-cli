@@ -31,6 +31,17 @@ if ! type python3 > /dev/null; then
 	exit 1
 fi
 
+if [[ "$1" == "download" ]]; then
+	shift
+	(
+		set -e
+		mkdir -p $LARADOCK_ROOT
+		cd $LARADOCK_ROOT
+		curl -o $LARADOCK_CLI -fsSL https://github.com/Tarik02/laradock-cli/raw/master/cli.py
+	)
+	exit $?
+fi
+
 if [[ "$1" == "init" ]]; then
 	shift
 	(
