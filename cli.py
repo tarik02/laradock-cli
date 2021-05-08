@@ -10,6 +10,7 @@ import os
 import urllib.request
 import shutil
 import re
+import getpass
 import grp
 import importlib.util
 from collections import namedtuple
@@ -145,12 +146,20 @@ env = dotenv_values(LARADOCK_CONTAINERS_ROOT/'.env')
 APP_CODE_PATH = (LARADOCK_CONTAINERS_ROOT/env['APP_CODE_PATH_HOST']).resolve()
 APP_CODE_PATH_HOST = env['APP_CODE_PATH_HOST']
 APP_CODE_PATH_CONTAINER = env['APP_CODE_PATH_CONTAINER']
+APP_USERNAME = env.get('APP_USERNAME') or 'laradock'
 LARADOCK_CLI_DEFAULT_CONTAINERS = (env.get('LARADOCK_CLI_DEFAULT_CONTAINERS') or 'nginx,mysql,workspace').split(',')
 LARADOCK_CLI_DEFAULT_WORKSPACE = env.get('LARADOCK_CLI_DEFAULT_WORKSPACE') or 'workspace'
 LARADOCK_CLI_WORKSPACE_PREFIX = env.get('LARADOCK_CLI_WORKSPACE_PREFIX') or 'workspace'
 
 
+def is_in_container() -> bool:
+    return getpass.getuser() == APP_USERNAME
+
+
 def path_host_to_container(host: Path) -> Optional[str]:
+    if is_in_container():
+        return host
+
     try:
         return Path(APP_CODE_PATH_CONTAINER)/host.relative_to(APP_CODE_PATH)
     except ValueError:
@@ -158,6 +167,9 @@ def path_host_to_container(host: Path) -> Optional[str]:
 
 
 def path_container_to_host(container: str) -> Optional[Path]:
+    if is_in_container():
+        return container
+
     if container.startswith(APP_CODE_PATH_CONTAINER):
         return APP_CODE_PATH/container[len(APP_CODE_PATH_CONTAINER) + 1:]
     else:
@@ -170,6 +182,33 @@ def compose(*args):
         'docker-compose',
         *args,
     )
+
+
+def exec(*args, user='laradock'):
+    if is_in_container():
+        if user != APP_USERNAME:
+            shell(
+                Path.cwd(),
+                'sudo',
+                '-u',
+                user,
+                *args
+            )
+        else:
+            shell(
+                Path.cwd(),
+                *args
+            )
+    else:
+        compose(
+            'exec',
+            f'--user={user}',
+            f'--workdir={Path.cwd()}',
+            load_project_env().get('LARADOCK_CLI_WORKSPACE', LARADOCK_CLI_DEFAULT_WORKSPACE),
+            'sh',
+            '-c',
+            ' '.join(args),
+        )
 
 
 def start_services(services):
@@ -374,7 +413,7 @@ try:
             f'clear && bash -c \\$SHELL',
         )
     elif action == 'sudo':
-        container_name = load_project_env().get('LARADOCK_CLI_WORKSPACE', LARADOCK_CLI_DEFAULT_WORKSPACE_CONTAINER)
+        container_name = load_project_env().get('LARADOCK_CLI_WORKSPACE', LARADOCK_CLI_DEFAULT_WORKSPACE)
         compose(
             'exec',
             '--user=root',
@@ -406,7 +445,7 @@ try:
     elif action == 'reload':
         compose('exec', 'nginx', 'nginx', '-s', 'reload')
     elif action == 'run':
-        container_name = load_project_env().get('LARADOCK_CLI_WORKSPACE', LARADOCK_CLI_DEFAULT_WORKSPACE_CONTAINER)
+        container_name = load_project_env().get('LARADOCK_CLI_WORKSPACE', LARADOCK_CLI_DEFAULT_WORKSPACE)
         command = shellquote(' '.join(args))
         compose(
             'exec',
@@ -434,8 +473,9 @@ try:
 
             if hasattr(mod, action):
                 sys.exit(getattr(mod, action)(
-                    namedtuple('Context', ['compose', 'laradock_env', 'project_dir', 'project_env', 'args'])(
+                    namedtuple('Context', ['compose', 'exec', 'laradock_env', 'project_dir', 'project_env', 'args'])(
                         compose,
+                        exec,
                         env,
                         project_dir,
                         project_env,
